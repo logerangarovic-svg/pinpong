@@ -1,126 +1,96 @@
 from pygame import *
-import random  # Импортируем модуль random
+from random import *
 
-win = display.set_mode((720, 480))
-display.set_caption("Pong")  # Добавляем заголовок окну
+win = display.set_mode((720,480))
+
 clock = time.Clock()
 
-class Player(sprite.Sprite):  # Наследуемся от sprite.Sprite
-    def __init__(self, x, y, speed):
-        super().__init__()  # Инициализация sprite
-        self.image = Surface([50, 150])  # Создаем поверхность для игрока
-        self.image.fill((255, 255, 255))  # Заполняем белым цветом
-        self.rect = self.image.get_rect()  # Получаем прямоугольник из поверхности
-        self.rect.x = x
-        self.rect.y = y
-        self.speed = speed
-        self.width = 50
-        self.height = 150
-        self.x = x
-        self.y = y
+init()
+img_genemi = font.Font(None, 50)
 
-    def update(self): # Используем update вместо move
+class Player():
+    def __init__(self,x,y,speed):
+        self.hitbox = Rect(x,y,30,100)
+        self.speed = speed
+        self.score = 0
+        
+        self.score_img = img_genemi.render(str(self.score), True,(222,33,5), (22,77,9))
+        
+    def move(self):
         key_list = key.get_pressed()
         if key_list[K_w]:
-            self.rect.y -= self.speed 
+            self.hitbox.y -= self.speed
         if key_list[K_s]:
-            self.rect.y += self.speed
-        if self.rect.bottom > 480:
-            self.rect.bottom = 480
-        if self.rect.top < 0:
-            self.rect.top = 0
+            self.hitbox.y += self.speed
+        if self.hitbox.bottom > 480:
+            self.hitbox.bottom = 480
+        if self.hitbox.top < 0:
+            self.hitbox.top = 0
+        if self.hitbox.colliderect(ball.hitbox):
+            ball.speed_x = ball.speed
+            ball.random_x = randint(1,3)
+            ball.random_y = randint(1,3)
 
     def autopilot(self):
-        if ball.hitbox.cenetry < self.hitbox.cenetry:
+        if ball.hitbox.centery < self.hitbox.centery:
             self.hitbox.y -= self.speed
         else:
-            self.hitbox.y = self.speed
-        if self.hitbox.collide_rect(ball.hitbox):
+            self.hitbox.y += self.speed
+                
+        if self.hitbox.colliderect(ball.hitbox):
             ball.speed_x = -ball.speed
 
-class Ball(sprite.Sprite):  # Наследуемся от sprite.Sprite
-    def __init__(self, x, y, speed):
-        super().__init__()  # Инициализация sprite
-        self.image = Surface([34, 34])  # Создаем поверхность для мяча
-        self.image.fill((255, 255, 255))  # Заполняем белым цветом
-        self.rect = self.image.get_rect()  # Получаем прямоугольник из поверхности
-        self.rect.x = x
-        self.rect.y = y
+
+class Ball():
+    def __init__(self,x,y,speed):
+        self.hitbox = Rect(x,y,34,34)
         self.speed = speed
         self.speed_x = speed
         self.speed_y = speed
-        self.width = 34
-        self.height = 34
-        self.x = x
-        self.y = y
-
-    def update(self): # Используем update вместо move
-        self.rect.x += self.speed_x
-        self.rect.y += self.speed_y
-        if self.rect.bottom > 480:
-            self.speed_y *= -1
-        if self.rect.top < 0:
-            self.speed_y *= -1
-        if self.rect.left < 0:
+        self.random_x = 1
+        self.random_y = 1
+    def move(self):
+        self.hitbox.x += self.speed_x * self.random_x
+        self.hitbox.y += self.speed_y * self.random_y
+        if self.hitbox.top < 0:
+            self.speed_y = self.speed
+        if self.hitbox.bottom > 480:
             self.speed_y = -self.speed
-            self.hitbox.center = (360,240)
+        if self.hitbox.left < 0:
+            self.speed_x = self.speed
+            self.hitbox.center = (360, 240)
+            player1.score += 1
+            player1.score_img = img_genemi.render(str(player1.score), True,(222,33,5), (22,77,9))
+            time.wait(1000)
+            self.random_x = 1
+            self.random_y = 1
+        if self.hitbox.right > 720:
+            self.speed_x = -self.speed
+            self.hitbox.center = (360, 240)
+            
+            player2.score += 1
+            player2.score_img = img_genemi.render(str(player2s.score), True,(22,222,5), (44,22,91))
             time.wait(1000)
 
-            
-        if self.rect.right > 720:
-            self.speed_x *= -1
 
+player1 = Player(50,240,5)
+player2 = Player(620,240,1)
+ball = Ball(360,240,2)
 
-# Создаем спрайты
-player1 = Player(20, 240, 5)  # Изменил координаты, чтобы не упирался в стену
-player2 = Player(650, 240, 5) # Изменил координаты, чтобы не упирался в стену
-ball = Ball(360, 240, 5)
-
-# Создаем группы спрайтов
-all_sprites = sprite.Group()
-all_sprites.add(player1)
-all_sprites.add(player2)
-all_sprites.add(ball)
-
-# Основной цикл игры
-game = True
-finish = False
-while game:
-    win.fill((0, 0, 0))
-
-    for e in event.get():
+while True:
+    win.fill((255,255,255))
+    event_list = event.get()
+    for e in event_list:
         if e.type == QUIT:
-            game = False
-
-    if not finish:
-        # Движение и обновление спрайтов
-        player1.update()
-        ball.update()
-
-        # "Автопилот" для второго игрока (упрощенная версия)
-        if player2.rect.centery < ball.rect.centery:
-            player2.rect.y += player2.speed
-        elif player2.rect.centery > ball.rect.centery:
-            player2.rect.y -= player2.speed
-
-        
-        if sprite.collide_rect(player1, ball):
-            ball.speed_x *= -1
-            ball.rect.x = player1.rect.right  
-        if sprite.collide_rect(player2, ball):
-            ball.speed_x *= -1
-            ball.rect.x = player2.rect.left  
-
-        
-        if player2.rect.bottom > 480:
-            player2.rect.bottom = 480
-        if player2.rect.top < 0:
-            player2.rect.top = 0
-
-        
-        all_sprites.draw(win)
-
-    clock.tick(60)  
+            exit()
+    player1.move()
+    draw.rect(win,(255,0,0),player1.hitbox)
+    player2.autopilot()
+    draw.rect(win,(255,0,0),player2.hitbox)
+    ball.move()
+    draw.rect(win,(255,0,0),ball.hitbox)
+    win.blit(player1.score_img,(20,70))
+    win.blit(player2.score_img,(680,70))
     display.update()
-
+    clock.tick(200)
 
