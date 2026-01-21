@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Пинг-Понг Pro</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    #gameContainer {
+      position: relative;
+      width: 800px;
+      text-align: center;
+    }
+
+    #menu {
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border: 2px solid #4a00e0;
+      animation: fadeIn 0.8s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 {
+      font-size: 42px;
+      margin-bottom: 25px;
+      background: linear-gradient(to right, #ff7e5f, #feb47b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      margin: 12px 0;
+      background: linear-gradient(to right, #8e2de2, #4a00e0);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: bold;
+    }
+
+    .btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(142, 45, 226, 0.4);
+      background: linear-gradient(to right, #a239ca, #5d1fc9);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    #difficultyPanel {
+      display: none;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #555;
+    }
+
+    .radio-group {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+
+    .radio-option {
+      background: rgba(255,255,255,0.1);
+      padding: 10px 20px;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .radio-option:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    input[type="radio"] {
+      display: none;
+    }
+
+    input[type="radio"]:checked + .radio-option {
+      background: rgba(138, 43, 226, 0.4);
+      color: #fff;
+    }
+
+    #gameCanvas {
+      display: none;
+      border: 2px solid #8e2de2;
+      border-radius: 8px;
+      background: #000;
+      margin-top: 20px;
+    }
+
+    #scoreDisplay {
+      font-size: 28px;
+      margin-top: 15px;
+      font-weight: bold;
+      color: #feb47b;
+      text-shadow: 0 0 10px rgba(254, 180, 123, 0.5);
+    }
+
+    #backBtn {
+      margin-top: 15px;
+      background: linear-gradient(to right, #ff416c, #ff4b2b);
+    }
+
+    canvas {
+      cursor: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- Главное меню -->
+    <div id="menu">
+      <h1>🏓 Пинг-Понг Pro</h1>
+      <button class="btn" onclick="startGame('ai')">🤖 Против ИИ</button>
+      <button class="btn" onclick="startGame('pvp')">👥 2 Игрока</button>
+      <button class="btn" onclick="startGame('demo')">🎬 Автопилот (Демо)</button>
+
+      <!-- Панель сложности (показывается только для режима ИИ) -->
+      <div id="difficultyPanel">
+        <div>Выберите сложность:</div>
+        <div class="radio-group">
+          <label><input type="radio" name="diff" value="easy" checked><span class="radio-option">Лёгкий</span></label>
+          <label><input type="radio" name="diff" value="medium"><span class="radio-option">Средний</span></label>
+          <label><input type="radio" name="diff" value="hard"><span class="radio-option">Сложный</span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Игровое поле -->
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="scoreDisplay">0 : 0</div>
+    <button id="backBtn" class="btn" onclick="goToMenu()" style="display:none;">🔙 В меню</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const menu = document.getElementById('menu');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const backBtn = document.getElementById('backBtn');
+    const difficultyPanel = document.getElementById('difficultyPanel');
+
+    let gameMode = null; // 'ai', 'pvp', 'demo'
+    let playerScore = 0;
+    let aiScore = 0;
+    let animationId = null;
+
+    // Параметры объектов
+    const paddleWidth = 12;
+    const paddleHeight = 100;
+    const ballRadius = 10;
+
+    const leftPaddle = {
+      x: 30,
+      y: canvas.height / 2 - paddleHeight / 2,
+      width: paddleWidth,
+      height: paddleHeight,
+      speed: 8,
+      dy: 0
+    };
+
+    const rightPaddle = {
+      x: canvas.width - 30 - paddleWidth,
+      y: canvas.height / 2 - paddleHeight / 2,
+      width: paddleWidth,
+      height: paddleHeight,
+      speed: 8,
+      dy: 0
+    };
+
+    const ball = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: ballRadius,
+      dx: 5,
+      dy: 5,
+      baseSpeed: 5
+    };
+
+    // Управление (для PVP)
+    const keys = {
+      w: false,
+      s: false,
+      ArrowUp: false,
+      ArrowDown: false
+    };
+
+    window.addEventListener('keydown', e => {
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    });
+    window.addEventListener('keyup', e => {
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    });
+
+    // Следование за мышью (для режима ИИ)
+    let mouseY = canvas.height / 2;
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseY = e.clientY - rect.top;
+    });
+
+    // Настройки ИИ
+    let aiSettings = {
+      reaction: 0.07,
+      maxSpeed: 4
+    };
+
+    function setDifficulty(level) {
+      switch (level) {
+        case 'easy':
+          aiSettings.reaction = 0.05;
+          aiSettings.maxSpeed = 3;
+          break;
+        case 'medium':
+          aiSettings.reaction = 0.08;
+          aiSettings.maxSpeed = 4.5;
+          break;
+        case 'hard':
+          aiSettings.reaction = 0.12;
+          aiSettings.maxSpeed = 6;
+          break;
+      }
+    }
+
+    function resetBall() {
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height / 2;
+      ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.baseSpeed;
+      ball.dy = (Math.random() * 2 - 1) * ball.baseSpeed;
+    }
+
+    function updatePaddles() {
+      // Левая ракетка
+      if (gameMode === 'pvp') {
+        if (keys.w) leftPaddle.y -= leftPaddle.speed;
+        if (keys.s) leftPaddle.y += leftPaddle.speed;
+      } else if (gameMode === 'ai') {
+        // Следует за мышью
+        leftPaddle.y = mouseY - leftPaddle.height / 2;
+      } else if (gameMode === 'demo') {
+        // ИИ управляет левой ракеткой
+        const targetY = ball.y - leftPaddle.height / 2;
+        const diff = targetY - leftPaddle.y;
+        const move = Math.min(aiSettings.maxSpeed, Math.abs(diff * aiSettings.reaction));
+        leftPaddle.y += diff > 0 ? move : -move;
+      }
+
+      // Правая ракетка
+      if (gameMode === 'pvp') {
+        if (keys.ArrowUp) rightPaddle.y -= rightPaddle.speed;
+        if (keys.ArrowDown) rightPaddle.y += rightPaddle.speed;
+      } else {
+        // ИИ управляет правой ракеткой
+        const targetY = ball.y - rightPaddle.height / 2;
+        const diff = targetY - rightPaddle.y;
+        const move = Math.min(aiSettings.maxSpeed, Math.abs(diff * aiSettings.reaction));
+        rightPaddle.y += diff > 0 ? move : -move;
+      }
+
+      // Ограничения
+      [leftPaddle, rightPaddle].forEach(p => {
+        p.y = Math.max(0, Math.min(canvas.height - p.height, p.y));
+      });
+    }
+
+    function updateBall() {
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+
+      // Отскок от верха/низа
+      if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+        ball.dy = -ball.dy;
+      }
+
+      // Отскок от левой ракетки
+      if (
+        ball.dx < 0 &&
+        ball.x - ball.radius <= leftPaddle.x + leftPaddle.width &&
+        ball.y >= leftPaddle.y &&
+        ball.y <= leftPaddle.y + leftPaddle.height
+      ) {
+        const hitPos = (ball.y - (leftPaddle.y + leftPaddle.height / 2)) / (leftPaddle.height / 2);
+        ball.dx = Math.abs(ball.dx);
+        ball.dy = hitPos * ball.baseSpeed;
+      }
+
+      // Отскок от правой ракетки
+      if (
+        ball.dx > 0 &&
+        ball.x + ball.radius >= rightPaddle.x &&
+        ball.y >= rightPaddle.y &&
+        ball.y <= rightPaddle.y + rightPaddle.height
+      ) {
+        const hitPos = (ball.y - (rightPaddle.y + rightPaddle.height / 2)) / (rightPaddle.height / 2);
+        ball.dx = -Math.abs(ball.dx);
+        ball.dy = hitPos * ball.baseSpeed;
+      }
+
+      // Голы
+      if (ball.x < 0) {
+        aiScore++;
+        updateScore();
+        resetBall();
+      } else if (ball.x > canvas.width) {
+        playerScore++;
+        updateScore();
+        resetBall();
+      }
+    }
+
+    function updateScore() {
+      scoreDisplay.textContent = `${playerScore} : ${aiScore}`;
+    }
+
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Центральная линия
+      ctx.setLineDash([10, 10]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.strokeStyle = '#555';
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Ракетки
+      ctx.fillStyle = '#4a00e0';
+      ctx.fillRect(leftPaddle.x, leftPaddle.y, leftPaddle.width, leftPaddle.height);
+      ctx.fillStyle = gameMode === 'pvp' ? '#ff416c' : '#00c9ff';
+      ctx.fillRect(rightPaddle.x, rightPaddle.y, rightPaddle.width, rightPaddle.height);
+
+      // Мяч
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+
+      // Блики на мяче
+      ctx.beginPath();
+      ctx.arc(ball.x - 3, ball.y - 3, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fill();
+    }
+
+    function gameLoop() {
+      updatePaddles();
+      updateBall();
+      draw();
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    // === УПРАВЛЕНИЕ РЕЖИМАМИ ===
+
+    function startGame(mode) {
+      gameMode = mode;
+      playerScore = 0;
+      aiScore = 0;
+      updateScore();
+
+      if (mode === 'ai') {
+        difficultyPanel.style.display = 'block';
+        const selected = document.querySelector('input[name="diff"]:checked').value;
+        setDifficulty(selected);
+      } else {
+        difficultyPanel.style.display = 'none';
+        if (mode === 'demo') {
+          setDifficulty('hard'); // демо — всегда сложный ИИ
+        } else {
+          setDifficulty('medium');
+        }
+      }
+
+      // Сброс позиций
+      leftPaddle.y = canvas.height / 2 - paddleHeight / 2;
+      rightPaddle.y = canvas.height / 2 - paddleHeight / 2;
+      resetBall();
+
+      // Переключение экранов
+      menu.style.display = 'none';
+      canvas.style.display = 'block';
+      scoreDisplay.style.display = 'block';
+      backBtn.style.display = 'block';
+
+      // Запуск игры
+      if (animationId) cancelAnimationFrame(animationId);
+      gameLoop();
+    }
+
+    function goToMenu() {
+      if (animationId) cancelAnimationFrame(animationId);
+      menu.style.display = 'block';
+      canvas.style.display = 'none';
+      scoreDisplay.style.display = 'none';
+      backBtn.style.display = 'none';
+    }
+
+    // Инициализация
+    resetBall();
+    updateScore();
+  </script>
+</body>
+</html>
